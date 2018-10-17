@@ -97,23 +97,41 @@ app.use(function (req, res, next) {
 app.get('/', (req, res) => res.send('Hello World!'))
 
 app.post('/query', async (req, res) => {
-    console.info("req.body", req.body)
     try {
+
+        const state = await getState(req.body.placeID)
+
+        const uri = `${process.env.MODEL}/weather/weather-pred?requester=${encodeURI(req.body.requester)}&longitude=${req.body.coords.coordinates[0]}&latitude=${req.body.coords.coordinates[1]}&city_name=${encodeURI(req.body.city)}&state=${state}&num_of_days_prediction=7&start_date=${req.body.date}`
+
+        const response = await rpn({
+            uri: uri,
+            method: 'GET',
+            maxAttempts: 1,
+            retryDelay: 300,
+            retryStrategy: rpn.RetryStrategies.HTTPOrNetworkError,
+            fullResponse: false,
+            json: true
+        })
+
         await Query.create({
             date: req.body.date,
             uuid: uuid.v4(),
             geographicalAttributes: {
                 "city-name": req.body.city,
-                elevation: 1,
+                elevation: response.geographicalAttributes.elevation,
                 latitude: req.body.coords.coordinates[1],
                 longitude: req.body.coords.coordinates[0],
-                state: await getState(req.body.placeID)
+                state: state
             },
+            historical: response.historical,
             shortName: req.body.shortName || "",
             isGreaterThanOneMonth: false,
             isGreaterThanOneWeek: false,
             isGreaterThanOneYear: false,
             numberOfPredictedDays: 7,
+            predictions: response.predictions,
+            rangeFrom: response.rangeFrom,
+            rangeTo: response.rangeTo,
             requester: req.body.requester,
             placeID: req.body.placeID
         })
