@@ -7,12 +7,12 @@ const mongoose = require('mongoose');
 const rpn = require("requestretry");
 const uuid = require("uuid");
 
-
 async function connect() {
     try {
-        mongoose.connect(process.env.MONGO, { useNewUrlParser: true });
-    }
-    catch(err) {
+        mongoose.connect(process.env.MONGO, {
+            useNewUrlParser: true
+        });
+    } catch (err) {
         console.info("Error connecting to MongoDB", err)
     }
 }
@@ -23,18 +23,19 @@ const RAW_PLACES_URL = "https://maps.googleapis.com/maps/api/place/textsearch/js
 const PLACES_KEY = process.env.PLACES_KEY
 
 
-const BigDataSchema = new mongoose.Schema(
-    {
-        date: Date,
-        id: String,
-        latitude: Number,
-        longitude: Number,
-        state: String,
-        name: String,
-        elevation: Number,
-        rainfall: Number,
-        Location: JSON
-    }, { collection: 'bigdata' });
+const BigDataSchema = new mongoose.Schema({
+    date: Date,
+    id: String,
+    latitude: Number,
+    longitude: Number,
+    state: String,
+    name: String,
+    elevation: Number,
+    rainfall: Number,
+    Location: JSON
+}, {
+    collection: 'bigdata'
+});
 
 const BigData = mongoose.model('BigData', BigDataSchema);
 
@@ -57,32 +58,29 @@ const QuerySchema = new mongoose.Schema({
     "rangeFrom": Date,
     "rangeTo": Date,
     "version": String,
-    "historical": [
-        {
-            "day": String,
-            "date": Date,
-            "min": Number,
-            "max": Number
-        }
-    ],
-    "predictions": [
-        {
-            "day": String,
-            "date": Date,
-            "min": Number,
-            "max": Number
-        }
-    ],
-    "actual": [
-        {
-            "day": String,
-            "date": Date,
-            "min": Number,
-            "max": Number
-        }
-    ]
+    "placeID": String,
+    "historical": [{
+        "day": String,
+        "date": Date,
+        "min": Number,
+        "max": Number
+    }],
+    "predictions": [{
+        "day": String,
+        "date": Date,
+        "min": Number,
+        "max": Number
+    }],
+    "actual": [{
+        "day": String,
+        "date": Date,
+        "min": Number,
+        "max": Number
+    }]
 
-}, { collection: 'queries' })
+}, {
+    collection: 'queries'
+})
 
 const Query = mongoose.model('Query', QuerySchema)
 
@@ -97,10 +95,7 @@ app.use(function (req, res, next) {
 });
 
 app.get('/', (req, res) => res.send('Hello World!'))
-app.post('/test', (req, res) => {
-    console.info("Test", req.body)
-    res.status(200).send("All Good!")
-})
+
 app.post('/query', async (req, res) => {
     console.info("req.body", req.body)
     try {
@@ -108,22 +103,24 @@ app.post('/query', async (req, res) => {
             date: req.body.date,
             uuid: uuid.v4(),
             geographicalAttributes: {
-              "city-name": req.body.city,
-              elevation: 1,
-              latitude: req.body.coords.coordinates[1],
-              longitude: req.body.coords.coordinates[0],
-              state: req.body.state
+                "city-name": req.body.city,
+                elevation: 1,
+                latitude: req.body.coords.coordinates[1],
+                longitude: req.body.coords.coordinates[0],
+                state: await getState(req.body.placeID)
             },
             shortName: req.body.shortName || "",
             isGreaterThanOneMonth: false,
             isGreaterThanOneWeek: false,
             isGreaterThanOneYear: false,
             numberOfPredictedDays: 7,
-            requester: req.body.requester
-       } )
-       return res.json({status: "Created!"})
-    }
-    catch(err) {
+            requester: req.body.requester,
+            placeID: req.body.placeID
+        })
+        return res.json({
+            status: "Created!"
+        })
+    } catch (err) {
         console.error("There was an error with creating a query", err)
         return res.status(500)
     }
@@ -135,18 +132,38 @@ app.get('/text', async (req, res) => {
     const uri = `${RAW_PLACES_URL}${req.query.place}&key=${PLACES_KEY}`
     try {
         return res.json(await rpn({
-                uri: uri,
-                method: 'GET',
-                maxAttempts: 1,
-                retryDelay: 300,
-                retryStrategy: rpn.RetryStrategies.HTTPOrNetworkError,
-                fullResponse: false,
-                json: true
-            }))
-    }
-    catch (err) {
+            uri: uri,
+            method: 'GET',
+            maxAttempts: 1,
+            retryDelay: 300,
+            retryStrategy: rpn.RetryStrategies.HTTPOrNetworkError,
+            fullResponse: false,
+            json: true
+        }))
+    } catch (err) {
         console.info("There was an issue with the Places operation", err)
     }
 })
+
+async function getState(placeID) {
+    const uri = `https://maps.googleapis.com/maps/api/place/details/json?placeid=${placeID}&fields=name,rating,formatted_phone_number,address_component&key=${PLACES_KEY}`
+    try {
+        const response = await rpn({
+            uri: uri,
+            method: 'GET',
+            maxAttempts: 1,
+            retryDelay: 300,
+            retryStrategy: rpn.RetryStrategies.HTTPOrNetworkError,
+            fullResponse: false,
+            json: true
+        })
+        const { short_name } = response.result.address_components.find(component => {
+            return component.types.includes("administrative_area_level_1")
+        })
+        return short_name 
+    } catch (err) {
+        console.info("There was an issue with getting the state", err)
+    }
+}
 
 app.listen(port, () => console.log(`Example app listening on port ${port}!`))
