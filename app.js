@@ -22,23 +22,6 @@ connect()
 const RAW_PLACES_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json?query="
 const PLACES_KEY = process.env.PLACES_KEY
 
-
-const BigDataSchema = new mongoose.Schema({
-    date: Date,
-    id: String,
-    latitude: Number,
-    longitude: Number,
-    state: String,
-    name: String,
-    elevation: Number,
-    rainfall: Number,
-    Location: JSON
-}, {
-    collection: 'bigdata'
-});
-
-const BigData = mongoose.model('BigData', BigDataSchema);
-
 const QuerySchema = new mongoose.Schema({
     "requester": String,
     "geographicalAttributes": {
