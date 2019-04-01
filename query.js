@@ -45,16 +45,38 @@ const QuerySchema = new mongoose.Schema({
     }]
 
 }, {
-        collection: 'queries'
-    })
+    collection: 'queries'
+})
 
 const Query = mongoose.model('Query', QuerySchema)
 
-exports.handler = async (event) => {
+exports.handler = async event => {
     try {
-        return await Query.find().sort('-date')
-    }
-    catch (err) {
-        console.error("There was an error retrieving queries", err)
+        // If a filter is passed in, check whether it returns any results
+        // TODO figure out how to reduce the amount of code
+        if (event['params']['querystring']['filter']) {
+
+            const filter = event['params']['querystring']['filter']
+
+            const withFilter = await Query.find({
+                requester: filter
+            }).sort('-date').limit(10)
+
+            if (withFilter && withFilter.length === 0) {
+                console.info("no results")
+                return []
+            }
+
+            else return withFilter
+        }
+        
+        // If a filter is not passed in, return all results
+        else {
+            return await Query.find().sort('-date').limit(50)
+        }
+
+    } catch (err) {
+        console.error("There was an error retrieving queries", err, event)
+        process.exit(1)
     }
 }
